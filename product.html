@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product Details</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f8f8;
+      margin: 0;
+      padding: 2rem;
+    }
+    .product-container {
+      max-width: 900px;
+      margin: auto;
+      background: #fff;
+      border-radius: 10px;
+      padding: 2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .product-title {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      color: #333;
+    }
+    .product-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .product-images img {
+    width: 100%;
+    max-width: 400px; /* limit size so it doesn't stretch */
+    height: auto; /* keeps correct proportions */
+    border-radius: 8px;
+    object-fit: contain; /* prevents cropping */
+    display: block;
+    margin: 0 auto;
+    }
+    .product-description {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      color: #555;
+    }
+    .back-btn {
+      display: inline-block;
+      margin-top: 1.5rem;
+      text-decoration: none;
+      background: #4ecdc4;
+      color: #fff;
+      padding: 0.7rem 1.2rem;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="product-container" id="productContainer">
+    <h1 class="product-title" id="productName"></h1>
+    <div class="product-images">
+      <img id="mainImage" src="" alt="Main Product Image" />
+      <img id="extraImage1" src="" alt="Extra Image 1" />
+      <img id="extraImage2" src="" alt="Extra Image 2" />
+    </div>
+    <p class="product-description" id="productDescription"></p>
+    <a href="index.html" class="back-btn">← Back to Store</a>
+  </div>
+
+  <script>
+    const products = [
+      {
+        id: 1,
+        name: "Romantic Rose Bouquet",
+        description: "This stunning bouquet of 12 red roses expresses love and passion. Comes with a personalized note and free delivery.",
+        images: [
+          "images/Romantic Rose Bouquet.webp",
+          "images/Romantic Rose Bouquet1.png",
+          "images/Romantic Rose Bouquet2.webp"
+        ]
+      },
+      {
+        id: 2,
+        name: "Spring Tulip Mix",
+        description: "Vibrant tulips in multiple colors bringing the freshness of spring to your home. Includes a vase.",
+        images: [
+          "images/Spring Tulip Mix.jpg",
+          "images/Spring Tulip Mix Extra1.jpg",
+          "images/Spring Tulip Mix Extra2.jpg"
+        ]
+      },
+      {
+        id: 3,
+        name: "Elegant Lily Arrangement",
+        description: "Pure white lilies arranged with greenery for a sophisticated and elegant look.",
+        images: [
+          "images/Elegant Lily Arrangement.webp",
+          "images/Elegant Lily Arrangement1.jpg",
+          "images/Elegant Lily Arrangement2.jpg"
+        ]
+      },
+      {
+        id: 4,
+        name: "Sunflower Delight",
+        description: "Bright and cheerful sunflowers to bring sunshine into any room.",
+        images: [
+          "images/Sunflower Delight.webp",
+          "images/Sunflower Delight1.webp",
+          "images/Sunflower Delight2.webp"
+        ]
+      },
+      {
+        id: 5,
+        name: "Orchid Elegance",
+        description: "Exotic orchids in a beautiful arrangement, perfect for special occasions.",
+        images: [
+          "images/Orchid Elegance.jpg",
+          "images/Orchid Elegance1.jpg",
+          "images/Orchid Elegance2.jpg"
+        ]
+      },
+      {
+        id: 6,
+        name: "Wildflower Meadow",
+        description: "A rustic mix of wildflowers creating a natural and charming bouquet.",
+        images: [
+          "images/Wildflower Meadow.jpg",
+          "images/Wildflower Meadow1.jpg",
+          "images/Wildflower Meadow2.jpg"
+        ]
+      }
+    ];
+
+    const params = new URLSearchParams(window.location.search);
+    const productId = parseInt(params.get('id'));
+    const product = products.find(p => p.id === productId);
+
+    if (product) {
+      document.getElementById("productName").textContent = product.name;
+      document.getElementById("mainImage").src = product.images[0];
+      document.getElementById("extraImage1").src = product.images[1];
+      document.getElementById("extraImage2").src = product.images[2];
+      document.getElementById("productDescription").textContent = product.description;
+    } else {
+      document.getElementById("productContainer").innerHTML = "<h2>Product not found</h2>";
+    }
+  </script>
+  <script src="https://js.yoco.com/sdk/v1/yoco-sdk-web.js"></script>
+
+</body>
+</html>
