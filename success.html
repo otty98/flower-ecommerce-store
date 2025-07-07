@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Payment Successful - Bloom & Blossom</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0fff0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      text-align: center;
+      color: #2ecc71;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    p {
+      font-size: 1.2rem;
+    }
+    a {
+      display: inline-block;
+      margin-top: 1rem;
+      background: #4ecdc4;
+      color: #fff;
+      padding: 0.8rem 1.2rem;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>🎉 Payment Successful!</h1>
+    <p>Thank you for your order. Your flowers will be delivered soon 🌸</p>
+    <a href="index.html">Return to Store</a>
+  </div>
+</body>
+
+<script>
+  localStorage.removeItem('cart'); // Clear saved cart
+  if (window.opener) {
+    window.opener.cart = []; // Clear in-memory cart
+    window.opener.updateCartDisplay();
+  }
+</script>
+</html>
