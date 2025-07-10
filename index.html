@@ -564,8 +564,20 @@
     // Load cart from localStorage or initialize
     let cart = JSON.parse(localStorage.getItem('cart')) || [];
 
-    function loadProducts() {
-        const productGrid = document.getElementById('productGrid');
+    async function loadProducts() {
+    const productGrid = document.getElementById('productGrid');
+    try {
+        // Fetch products from your backend API
+        const response = await fetch('http://localhost:5000/api/products');
+        
+        // Check if the response is successful
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const products = await response.json();
+
+        // Render products in the grid
         productGrid.innerHTML = products.map(product => `
             <div class="product-card fade-in">
                 <a href="product.html?id=${product.id}">
@@ -579,7 +591,17 @@
                 </div>
             </div>
         `).join('');
+    } catch (err) {
+        console.error('Failed to load products:', err);
+        productGrid.innerHTML = `
+            <div class="error-message" style="grid-column: 1/-1; text-align: center; padding: 2rem;">
+                <p style="color: red; font-weight: bold;">Failed to load products from backend</p>
+                <p style="color: #666;">Please check your connection and try again later.</p>
+            </div>
+        `;
     }
+}
+
 
 
     function addToCart(productId) {
