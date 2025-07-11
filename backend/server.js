@@ -80,6 +80,33 @@ app.get('/health', async (req, res) => {
     });
 });
 
+app.post('/api/orders', (req, res) => {
+    const { name, email, total } = req.body;
+    db.query('INSERT INTO orders (name, email, total) VALUES (?, ?, ?)',
+        [name, email, total],
+        (err, result) => {
+            if (err) {
+                console.error('Error saving order:', err);
+                res.status(500).send('Error saving order');
+            } else {
+                res.send('Order saved successfully!');
+            }
+        }
+    );
+});
+
+app.post('/api/cart', (req, res) => {
+    const { id, name, price, quantity } = req.body;
+    const sql = 'INSERT INTO cart (product_id, name, price, quantity) VALUES (?, ?, ?, ?)';
+    db.query(sql, [id, name, price, quantity], (err, result) => {
+        if (err) {
+            console.error('Failed to save cart item:', err);
+            return res.status(500).json({ success: false, message: 'Failed to save item' });
+        }
+        res.json({ success: true, message: 'Item added to cart' });
+    });
+});
+
 // Start Server
 const startServer = async () => {
     const dbConnected = await testConnection();
