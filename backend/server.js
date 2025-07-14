@@ -25,10 +25,10 @@ const pool = mysql.createPool({
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    timezone: '+00:00' // Changed from 'UTC' to '+00:00'
+    timezone: '+00:00'
 });
 
-// Database connection test function
+// Database connection test
 const testConnection = async () => {
     try {
         const connection = await pool.getConnection();
@@ -42,7 +42,7 @@ const testConnection = async () => {
     }
 };
 
-// API Routes
+// Products API
 app.get('/api/products', async (req, res) => {
     try {
         const [results] = await pool.query('SELECT * FROM products ORDER BY id DESC');
@@ -70,40 +70,134 @@ app.get('/api/products/:id', async (req, res) => {
     }
 });
 
-// Health Check Endpoint
+// Cart API - Complete Implementation
+app.get('/api/cart', async (req, res) => {
+    try {
+        const [results] = await pool.query('SELECT * FROM cart ORDER BY id DESC');
+        console.log(`✅ [GET /api/cart] Retrieved ${results.length} cart items`);
+        res.json(results);
+    } catch (err) {
+        console.error('❌ [GET /api/cart] Error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch cart items' });
+    }
+});
+
+app.post('/api/cart', async (req, res) => {
+    const { id, quantity } = req.body;
+    
+    try {
+        // Get product details
+        const [productResults] = await pool.query('SELECT * FROM products WHERE id = ?', [id]);
+        
+        if (productResults.length === 0) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+        
+        const product = productResults[0];
+        
+        // Check if item already exists in cart
+        const [existingItems] = await pool.query('SELECT * FROM cart WHERE product_id = ?', [id]);
+        
+        if (existingItems.length > 0) {
+            // Update existing item
+            const newQuantity = quantity <= 0 ? 0 : quantity;
+            
+            if (newQuantity <= 0) {
+                // Remove item if quantity is 0 or less
+                await pool.query('DELETE FROM cart WHERE product_id = ?', [id]);
+                console.log(`✅ [POST /api/cart] Removed product ${id} from cart`);
+            } else {
+                // Update quantity
+                await pool.query('UPDATE cart SET quantity = ? WHERE product_id = ?', [newQuantity, id]);
+                console.log(`✅ [POST /api/cart] Updated product ${id} quantity to ${newQuantity}`);
+            }
+        } else if (quantity > 0) {
+            // Add new item
+            await pool.query(
+                'INSERT INTO cart (product_id, name, price, quantity) VALUES (?, ?, ?, ?)',
+                [id, product.name, product.price, quantity]
+            );
+            console.log(`✅ [POST /api/cart] Added product ${id} to cart`);
+        }
+        
+        res.json({ success: true, message: 'Cart updated successfully' });
+    } catch (err) {
+        console.error('❌ [POST /api/cart] Error:', err.message);
+        res.status(500).json({ success: false, message: 'Failed to update cart' });
+    }
+});
+
+app.delete('/api/cart/:productId', async (req, res) => {
+    const productId = parseInt(req.params.productId);
+    
+    try {
+        await pool.query('DELETE FROM cart WHERE product_id = ?', [productId]);
+        console.log(`✅ [DELETE /api/cart/${productId}] Removed from cart`);
+        res.json({ success: true, message: 'Item removed from cart' });
+    } catch (err) {
+        console.error(`❌ [DELETE /api/cart/${productId}] Error:`, err.message);
+        res.status(500).json({ success: false, message: 'Failed to remove item' });
+    }
+});
+
+app.delete('/api/cart', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM cart');
+        console.log('✅ [DELETE /api/cart] Cleared entire cart');
+        res.json({ success: true, message: 'Cart cleared' });
+    } catch (err) {
+        console.error('❌ [DELETE /api/cart] Error:', err.message);
+        res.status(500).json({ success: false, message: 'Failed to clear cart' });
+    }
+});
+
+// Orders API
+app.post('/api/orders', async (req, res) => {
+    try {
+        const { paymentId, amount, items } = req.body;
+        
+        // 1. Save order to MySQL
+        const [orderId] = await db.execute(
+            'INSERT INTO orders (payment_id, amount, status) VALUES (?, ?, "completed")',
+            [paymentId, amount]
+        );
+        
+        // 2. Save order items
+        for (const item of items) {
+            await db.execute(
+                'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)',
+                [orderId.insertId, item.id, item.quantity, item.price]
+            );
+        }
+        
+        res.json({ orderId: orderId.insertId });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Order failed' });
+    }
+});
+
+app.post('/api/checkout', async (req, res) => {
+    const cartItems = req.body;
+    
+    try {
+        // Clear the cart after successful checkout
+        await pool.query('DELETE FROM cart');
+        console.log('✅ [POST /api/checkout] Checkout successful, cart cleared');
+        res.json({ success: true, message: 'Order placed successfully' });
+    } catch (err) {
+        console.error('❌ [POST /api/checkout] Error:', err.message);
+        res.status(500).json({ success: false, message: 'Checkout failed' });
+    }
+});
+
+// Health Check
 app.get('/health', async (req, res) => {
     const dbHealthy = await testConnection();
     res.json({
         status: dbHealthy ? 'healthy' : 'degraded',
         database: dbHealthy ? 'connected' : 'disconnected',
         timestamp: new Date().toISOString()
-    });
-});
-
-app.post('/api/orders', (req, res) => {
-    const { name, email, total } = req.body;
-    db.query('INSERT INTO orders (name, email, total) VALUES (?, ?, ?)',
-        [name, email, total],
-        (err, result) => {
-            if (err) {
-                console.error('Error saving order:', err);
-                res.status(500).send('Error saving order');
-            } else {
-                res.send('Order saved successfully!');
-            }
-        }
-    );
-});
-
-app.post('/api/cart', (req, res) => {
-    const { id, name, price, quantity } = req.body;
-    const sql = 'INSERT INTO cart (product_id, name, price, quantity) VALUES (?, ?, ?, ?)';
-    db.query(sql, [id, name, price, quantity], (err, result) => {
-        if (err) {
-            console.error('Failed to save cart item:', err);
-            return res.status(500).json({ success: false, message: 'Failed to save item' });
-        }
-        res.json({ success: true, message: 'Item added to cart' });
     });
 });
 
@@ -120,6 +214,12 @@ const startServer = async () => {
         console.log('📋 Available API endpoints:');
         console.log('   GET    /api/products      - Get all products');
         console.log('   GET    /api/products/:id  - Get single product');
+        console.log('   GET    /api/cart          - Get cart items');
+        console.log('   POST   /api/cart          - Add/update cart item');
+        console.log('   DELETE /api/cart/:id      - Remove cart item');
+        console.log('   DELETE /api/cart          - Clear cart');
+        console.log('   POST   /api/orders        - Create order');
+        console.log('   POST   /api/checkout      - Process checkout');
         console.log('   GET    /health            - Health check');
     });
 

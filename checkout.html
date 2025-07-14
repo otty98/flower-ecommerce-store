@@ -40,9 +40,13 @@
       margin: 1rem;
       cursor: pointer;
     }
-
     .yoco-sdk-popup {
-        z-index: 9999 !important; /* Force popup to be above everything */
+        z-index: 9999 !important;
+    }
+    .loading {
+      display: none;
+      margin: 1rem 0;
+      color: #666;
     }
   </style>
 </head>
@@ -54,8 +58,8 @@
             <button class="checkout-btn" onclick="payWithYoco()">Pay with Card (Yoco)</button>
             <div id="paypal-button-container"></div>
         </div>
+        <div id="loading" class="loading">Processing your order...</div>
     </div>
-
 
     <div class="test-instructions" style="
         background: #fff3cd;
@@ -79,62 +83,123 @@
     </div>
 
   <script>
-    // Get total from URL
+    // Get total from URL and cart from localStorage
     const urlParams = new URLSearchParams(window.location.search);
     const totalAmount = parseFloat(urlParams.get('total')) || 0;
+    const cartItems = JSON.parse(localStorage.getItem('cart')) || [];
     document.getElementById('cartTotal').textContent = 'R' + totalAmount.toFixed(2);
+
+    // Show loading spinner
+    function showLoading() {
+      document.getElementById('loading').style.display = 'block';
+    }
+
+    // Hide loading spinner
+    function hideLoading() {
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Save order to server
+    async function saveOrder(paymentData) {
+      showLoading();
+      try {
+        const response = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethod: paymentData.method,
+            paymentId: paymentData.id,
+            amount: totalAmount,
+            items: cartItems
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save order');
+        }
+
+        const data = await response.json();
+        return data.orderId;
+      } catch (error) {
+        console.error('Order save error:', error);
+        throw error;
+      } finally {
+        hideLoading();
+      }
+    }
 
     // Yoco Payment
     function payWithYoco() {
-        document.getElementById('paypal-button-container').style.display = 'none';
+      document.getElementById('paypal-button-container').style.display = 'none';
       const yoco = new window.YocoSDK({
-        publicKey: 'pk_test_YOCO_PUBLIC_KEY' // Replace with your Yoco test public key
+        publicKey: 'pk_test_YOCO_PUBLIC_KEY'
       });
+
       yoco.showPopup({
-        amountInCents: totalAmount * 100, // Convert Rands to cents
+        amountInCents: totalAmount * 100,
         currency: 'ZAR',
         name: 'Bloom & Blossom',
         description: 'Order Payment',
-        callback: function(result) {
-            document.getElementById('paypal-button-container').style.display = 'block';
-            if (result.error) {
-                alert('Payment failed: ' + result.error.message);
-                window.location.href = 'cancel.html';
-            } else {
-                alert('Payment successful! Token: ' + result.id);
-                window.location.href = 'success.html';
-            }
-            }
-        });
+        callback: async function(result) {
+          document.getElementById('paypal-button-container').style.display = 'block';
+          if (result.error) {
+            alert('Payment failed: ' + result.error.message);
+            window.location.href = 'cancel.html';
+            return;
+          }
+
+          try {
+            const orderId = await saveOrder({
+              method: 'yoco',
+              id: result.id
+            });
+            alert('Payment successful! Order ID: ' + orderId);
+            localStorage.removeItem('cart'); // Clear cart after successful order
+            window.location.href = 'success.html?order=' + orderId;
+          } catch (error) {
+            alert('Payment succeeded but order saving failed. Please contact support.');
+          }
         }
+      });
+    }
 
     // PayPal Payment
-        paypal.Buttons({
-        createOrder: function(data, actions) {
-            return actions.order.create({
-            purchase_units: [{
-                amount: {
-                value: (totalAmount / 18).toFixed(2) // Approx R18 = $1
-                }
-            }]
-            });
-        },
-        onApprove: function(data, actions) {
-            return actions.order.capture().then(function(details) {
-            alert('Transaction completed by ' + details.payer.name.given_name);
-            window.location.href = 'success.html';
-            });
-        },
-        onCancel: function(data) {
-            alert('Payment was cancelled.');
-            window.location.href = 'cancel.html';
-        },
-        onError: function(err) {
-            console.error('PayPal error:', err);
-            alert('Something went wrong during PayPal payment.');
-            window.location.href = 'cancel.html';
+    paypal.Buttons({
+      createOrder: function(data, actions) {
+        return actions.order.create({
+          purchase_units: [{
+            amount: {
+              value: (totalAmount / 18).toFixed(2) // Approx R18 = $1
+            }
+          }]
+        });
+      },
+      onApprove: async function(data, actions) {
+        try {
+          const details = await actions.order.capture();
+          const orderId = await saveOrder({
+            method: 'paypal',
+            id: data.orderID
+          });
+          
+          alert('Transaction completed by ' + details.payer.name.given_name);
+          localStorage.removeItem('cart'); // Clear cart after successful order
+          window.location.href = 'success.html?order=' + orderId;
+        } catch (error) {
+          console.error('PayPal capture error:', error);
+          alert('Payment succeeded but order processing failed');
         }
-        }).render('#paypal-button-container');
+      },
+      onCancel: function(data) {
+        alert('Payment was cancelled.');
+        window.location.href = 'cancel.html';
+      },
+      onError: function(err) {
+        console.error('PayPal error:', err);
+        alert('Something went wrong during PayPal payment.');
+        window.location.href = 'cancel.html';
+      }
+    }).render('#paypal-button-container');
   </script>
 </body>
 </html>
