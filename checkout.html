@@ -40,22 +40,66 @@
       margin: 1rem;
       cursor: pointer;
     }
-
     .yoco-sdk-popup {
-        z-index: 9999 !important; /* Force popup to be above everything */
+        z-index: 9999 !important;
     }
+    .loading {
+      display: none;
+      margin: 1rem 0;
+      color: #666;
+    }
+
+    .spinner {
+  animation: rotate 2s linear infinite;
+  height: 20px;
+  width: 20px;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.spinner circle {
+  stroke: #4ecdc4;
+  stroke-linecap: round;
+  animation: dash 1.5s ease-in-out infinite;
+}
+
+@keyframes rotate {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes dash {
+  0% {
+    stroke-dasharray: 1, 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -35;
+  }
+  100% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -124;
+  }
+}
   </style>
 </head>
 <body>
     <div class="checkout-container">
-        <h1>Secure Checkout</h1>
-        <p>Total Amount: <strong id="cartTotal">R0.00</strong></p>
-        <div class="payment-options">
-            <button class="checkout-btn" onclick="payWithYoco()">Pay with Card (Yoco)</button>
-            <div id="paypal-button-container"></div>
-        </div>
-    </div>
-
+  <h1>Secure Checkout</h1>
+  <p>Total Amount: <strong id="cartTotal">R0.00</strong></p>
+  
+  <div class="payment-options">
+    <button id="yoco-btn" class="checkout-btn">Pay with Card (Yoco)</button>
+    <div id="paypal-button-container"></div>
+  </div>
+  
+  <div id="loading" class="loading">
+    <svg class="spinner" viewBox="0 0 50 50">
+      <circle cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+    </svg>
+    Processing your payment...
+  </div>
+</div>
 
     <div class="test-instructions" style="
         background: #fff3cd;
@@ -79,62 +123,150 @@
     </div>
 
   <script>
-    // Get total from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const totalAmount = parseFloat(urlParams.get('total')) || 0;
-    document.getElementById('cartTotal').textContent = 'R' + totalAmount.toFixed(2);
+  // Enhanced Checkout Script
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Get cart data
+    const cartItems = JSON.parse(localStorage.getItem('cart')) || [];
+    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    document.getElementById('cartTotal').textContent = `R${totalAmount.toFixed(2)}`;
+    
+    // Initialize payment buttons
+    initPayPalButton();
+    initYocoSDK(totalAmount);
+  });
 
-    // Yoco Payment
-    function payWithYoco() {
-        document.getElementById('paypal-button-container').style.display = 'none';
-      const yoco = new window.YocoSDK({
-        publicKey: 'pk_test_YOCO_PUBLIC_KEY' // Replace with your Yoco test public key
+  // UI Helpers
+  function showLoading() {
+    document.getElementById('loading').style.display = 'block';
+    document.querySelectorAll('.checkout-btn').forEach(btn => {
+      btn.disabled = true;
+    });
+  }
+
+  function hideLoading() {
+    document.getElementById('loading').style.display = 'none';
+    document.querySelectorAll('.checkout-btn').forEach(btn => {
+      btn.disabled = false;
+    });
+  }
+
+  function showError(message) {
+    alert(`Error: ${message}`);
+    window.location.href = 'cancel.html';
+  }
+
+  // Order Processing
+  async function createOrder(paymentMethod, paymentId) {
+    const cartItems = JSON.parse(localStorage.getItem('cart')) || [];
+    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod,
+          paymentId,
+          amount: totalAmount,
+          items: cartItems,
+          status: 'completed'
+        })
       });
-      yoco.showPopup({
-        amountInCents: totalAmount * 100, // Convert Rands to cents
-        currency: 'ZAR',
-        name: 'Bloom & Blossom',
-        description: 'Order Payment',
-        callback: function(result) {
-            document.getElementById('paypal-button-container').style.display = 'block';
-            if (result.error) {
-                alert('Payment failed: ' + result.error.message);
-                window.location.href = 'cancel.html';
-            } else {
-                alert('Payment successful! Token: ' + result.id);
-                window.location.href = 'success.html';
-            }
-            }
-        });
-        }
 
-    // PayPal Payment
-        paypal.Buttons({
-        createOrder: function(data, actions) {
-            return actions.order.create({
-            purchase_units: [{
-                amount: {
-                value: (totalAmount / 18).toFixed(2) // Approx R18 = $1
-                }
-            }]
-            });
-        },
-        onApprove: function(data, actions) {
-            return actions.order.capture().then(function(details) {
-            alert('Transaction completed by ' + details.payer.name.given_name);
-            window.location.href = 'success.html';
-            });
-        },
-        onCancel: function(data) {
-            alert('Payment was cancelled.');
-            window.location.href = 'cancel.html';
-        },
-        onError: function(err) {
-            console.error('PayPal error:', err);
-            alert('Something went wrong during PayPal payment.');
-            window.location.href = 'cancel.html';
+      if (!response.ok) {
+        throw new Error('Failed to create order');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Order creation failed:', error);
+      throw error;
+    }
+  }
+
+  // Yoco Integration
+  function initYocoSDK(totalAmount) {
+    const yoco = new window.YocoSDK({
+      publicKey: 'pk_test_YOCO_PUBLIC_KEY' // Replace with your test key
+    });
+
+    document.getElementById('yoco-btn').addEventListener('click', async () => {
+      showLoading();
+      
+      try {
+        yoco.showPopup({
+          amountInCents: Math.round(totalAmount * 100),
+          currency: 'ZAR',
+          name: 'Bloom & Blossom',
+          description: `Order Payment (${cartItems.length} items)`,
+          callback: async function(result) {
+            if (result.error) {
+              throw new Error(result.error.message);
+            }
+
+            try {
+              const order = await createOrder('yoco', result.id);
+              localStorage.removeItem('cart');
+              window.location.href = `success.html?orderId=${order.id}`;
+            } catch (orderError) {
+              console.error('Order processing failed:', orderError);
+              showError('Payment succeeded but order creation failed');
+            }
+          }
+        });
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        hideLoading();
+      }
+    });
+  }
+
+  // PayPal Integration
+  function initPayPalButton() {
+    paypal.Buttons({
+      style: {
+        shape: 'rect',
+        color: 'gold',
+        layout: 'vertical',
+        label: 'paypal'
+      },
+
+      createOrder: function(data, actions) {
+        return actions.order.create({
+          purchase_units: [{
+            amount: {
+              value: (totalAmount / 18).toFixed(2), // Convert ZAR to USD
+              currency_code: 'USD'
+            },
+            description: `Flower Order (${cartItems.length} items)`
+          }]
+        });
+      },
+
+      onApprove: async function(data, actions) {
+        showLoading();
+        try {
+          const details = await actions.order.capture();
+          const order = await createOrder('paypal', data.orderID);
+          
+          localStorage.removeItem('cart');
+          window.location.href = `success.html?orderId=${order.id}`;
+        } catch (error) {
+          showError('Payment processing failed');
+        } finally {
+          hideLoading();
         }
-        }).render('#paypal-button-container');
-  </script>
-</body>
+      },
+
+      onError: function(err) {
+        showError('Payment failed: ' + err.message);
+      },
+
+      onCancel: function(data) {
+        window.location.href = 'cancel.html';
+      }
+    }).render('#paypal-button-container');
+  }
+</script>
 </html>

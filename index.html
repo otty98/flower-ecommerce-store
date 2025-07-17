@@ -503,68 +503,94 @@
     </footer>
 
     <script>
-    // Product data
     const products = [
-        {
-            id: 1,
-            name: "Romantic Rose Bouquet",
-            description: "A stunning arrangement of 12 red roses, perfect for expressing love and passion.",
-            price: 49.99,
-            image: "images/Romantic Rose Bouquet.webp"
-        },
-        {
-            id: 2,
-            name: "Spring Tulip Mix",
-            description: "Vibrant tulips in mixed colors bringing the freshness of spring to your home.",
-            price: 34.99,
-            image: "images/Spring Tulip Mix.jpg"
-        },
-        {
-            id: 3,
-            name: "Elegant Lily Arrangement",
-            description: "Pure white lilies arranged with greenery for a sophisticated and elegant look.",
-            price: 59.99,
-            image: "images/Elegant Lily Arrangement.webp"
-        },
-        {
-            id: 4,
-            name: "Sunflower Delight",
-            description: "Bright and cheerful sunflowers to bring sunshine into any room.",
-            price: 39.99,
-            image: "images/Sunflower Delight.webp"
-        },
-        {
-            id: 5,
-            name: "Orchid Elegance",
-            description: "Exotic orchids in a beautiful arrangement, perfect for special occasions.",
-            price: 74.99,
-            image: "images/Orchid Elegance.jpg"
-        },
-        {
-            id: 6,
-            name: "Wildflower Meadow",
-            description: "A rustic mix of wildflowers creating a natural and charming bouquet.",
-            price: 29.99,
-            image: "images/Wildflower Meadow.jpg"
-        }
-    ];
-
-
-    let slideIndex = 0;
-    const slides = document.querySelectorAll('.slide');
-    function showSlides() {
-        slides.forEach(slide => slide.style.opacity = '0');
-        slideIndex = (slideIndex + 1) % slides.length;
-        slides[slideIndex].style.opacity = '1';
-        setTimeout(showSlides, 5000); // Change every 5 seconds
+    {
+        id: 1,
+        name: "Romantic Rose Bouquet",
+        description: "A stunning arrangement of 12 red roses, perfect for expressing love and passion.",
+        price: 49.99,
+        image: "images/Romantic Rose Bouquet.webp"
+    },
+    {
+        id: 2,
+        name: "Spring Tulip Mix",
+        description: "Vibrant tulips in mixed colors bringing the freshness of spring to your home.",
+        price: 34.99,
+        image: "images/Spring Tulip Mix.jpg"
+    },
+    {
+        id: 3,
+        name: "Elegant Lily Arrangement",
+        description: "Pure white lilies arranged with greenery for a sophisticated and elegant look.",
+        price: 59.99,
+        image: "images/Elegant Lily Arrangement.webp"
+    },
+    {
+        id: 4,
+        name: "Sunflower Delight",
+        description: "Bright and cheerful sunflowers to bring sunshine into any room.",
+        price: 39.99,
+        image: "images/Sunflower Delight.webp"
+    },
+    {
+        id: 5,
+        name: "Orchid Elegance",
+        description: "Exotic orchids in a beautiful arrangement, perfect for special occasions.",
+        price: 74.99,
+        image: "images/Orchid Elegance.jpg"
+    },
+    {
+        id: 6,
+        name: "Wildflower Meadow",
+        description: "A rustic mix of wildflowers creating a natural and charming bouquet.",
+        price: 29.99,
+        image: "images/Wildflower Meadow.jpg"
     }
-    document.addEventListener('DOMContentLoaded', showSlides);
+];
 
+    let cart = [];
+    const API_BASE = 'http://localhost:5000/api';
 
-    // Load cart from localStorage or initialize
-    let cart = JSON.parse(localStorage.getItem('cart')) || [];
+    // Load products from backend or use fallback
+    async function loadProducts() {
+        displayProducts();
+        try {
+            const response = await fetch(`${API_BASE}/products`);
+            if (!response.ok) throw new Error('Network error');
+            const apiProducts = await response.json();
+            if (Array.isArray(apiProducts) && apiProducts.length > 0) {
+                products.splice(0, products.length, ...apiProducts);
+                displayProducts();
+            }
+        } catch (err) {
+            console.warn('Backend unavailable. Using fallback products.');
+        }
+    }
 
-    function loadProducts() {
+    // Load cart from backend
+    async function loadCart() {
+        try {
+            const response = await fetch(`${API_BASE}/cart`);
+            if (!response.ok) throw new Error('Failed to load cart');
+            const cartItems = await response.json();
+            
+            // Convert backend cart format to frontend format
+            cart = cartItems.map(item => ({
+                id: item.product_id,
+                name: item.name,
+                price: parseFloat(item.price),
+                quantity: item.quantity
+            }));
+            
+            updateCartDisplay();
+        } catch (err) {
+            console.error('Failed to load cart:', err);
+            cart = [];
+            updateCartDisplay();
+        }
+    }
+
+    function displayProducts() {
         const productGrid = document.getElementById('productGrid');
         productGrid.innerHTML = products.map(product => `
             <div class="product-card fade-in">
@@ -581,51 +607,77 @@
         `).join('');
     }
 
-
-    function addToCart(productId) {
+    async function addToCart(productId) {
         const product = products.find(p => p.id === productId);
+        if (!product) return;
+        
         const existingItem = cart.find(item => item.id === productId);
-
-        if (existingItem) {
-            existingItem.quantity += 1;
-        } else {
-            cart.push({...product, quantity: 1});
-        }
-
-        updateCartDisplay();
-
-        // Visual feedback
-        const button = event.target;
-        const originalText = button.textContent;
-        button.textContent = 'Added! ✓';
-        button.style.background = '#4ecdc4';
-        setTimeout(() => {
-            button.textContent = originalText;
-            button.style.background = '';
-        }, 1000);
-    }
-
-
-    function removeFromCart(productId) {
-        cart = cart.filter(item => item.id !== productId);
-        updateCartDisplay();
-    }
-
-
-    function updateQuantity(productId, change) {
-        const item = cart.find(item => item.id === productId);
-        if (item) {
-            item.quantity += change;
-            if (item.quantity <= 0) {
-                removeFromCart(productId);
+        const newQuantity = existingItem ? existingItem.quantity + 1 : 1;
+        
+        try {
+            const response = await fetch(`${API_BASE}/cart`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: productId, quantity: newQuantity })
+            });
+            
+            if (!response.ok) throw new Error('Failed to add to cart');
+            
+            // Update local cart
+            if (existingItem) {
+                existingItem.quantity = newQuantity;
             } else {
-                updateCartDisplay();
+                cart.push({ ...product, quantity: 1 });
             }
+            
+            updateCartDisplay();
+            
+            // Visual feedback
+            const button = event.target;
+            button.textContent = 'Added! ✓';
+            button.style.background = '#4ecdc4';
+            setTimeout(() => {
+                button.textContent = 'Add to Cart';
+                button.style.background = '';
+            }, 1000);
+            
+        } catch (err) {
+            console.error('Failed to add to cart:', err);
+            alert('Failed to add item to cart. Please try again.');
+        }
+    }
+
+    async function updateQuantity(productId, change) {
+        const item = cart.find(i => i.id === productId);
+        if (!item) return;
+        
+        const newQuantity = item.quantity + change;
+        
+        try {
+            const response = await fetch(`${API_BASE}/cart`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: productId, quantity: newQuantity })
+            });
+            
+            if (!response.ok) throw new Error('Failed to update cart');
+            
+            // Update local cart
+            if (newQuantity <= 0) {
+                cart = cart.filter(i => i.id !== productId);
+            } else {
+                item.quantity = newQuantity;
+            }
+            
+            updateCartDisplay();
+            
+        } catch (err) {
+            console.error('Failed to update quantity:', err);
+            alert('Failed to update cart. Please try again.');
         }
     }
 
     function updateCartDisplay() {
-        localStorage.setItem('cart', JSON.stringify(cart)); // Save cart
         const cartCount = document.getElementById('cartCount');
         const cartItems = document.getElementById('cartItems');
         const totalPrice = document.getElementById('totalPrice');
@@ -656,49 +708,58 @@
         totalPrice.textContent = `Total: $${total.toFixed(2)}`;
     }
 
+    async function checkout() {
+        if (cart.length === 0) {
+            alert('Your cart is empty!');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE}/checkout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cart)
+            });
+            
+            if (!response.ok) throw new Error('Checkout failed');
+            
+            alert('Order placed successfully!');
+            cart = [];
+            updateCartDisplay();
+            
+        } catch (err) {
+            console.error('Checkout failed:', err);
+            alert('Checkout failed. Please try again.');
+        }
+    }
 
     function toggleCart() {
         const cartModal = document.getElementById('cartModal');
         cartModal.style.display = cartModal.style.display === 'block' ? 'none' : 'block';
     }
 
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadProducts();
+        await loadCart();
+    });
 
-    function checkout() {
-        if (cart.length === 0) {
-            alert('Your cart is empty!');
-            return;
-        }
-        const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        window.location.href = `checkout.html?total=${total.toFixed(2)}`;
+    // Slideshow functionality
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+
+    function showSlide(n) {
+        slides[currentSlide].style.opacity = '0';
+        currentSlide = (n + slides.length) % slides.length;
+        slides[currentSlide].style.opacity = '1';
     }
 
-    // Close cart when clicking outside
-    document.getElementById('cartModal').addEventListener('click', (e) => {
-        if (e.target === document.getElementById('cartModal')) {
-            toggleCart();
-        }
-    });
-
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-        loadProducts();
-        updateCartDisplay();
-    });
-
-    // Smooth scrolling
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        });
-    });
+    setInterval(() => {
+        showSlide(currentSlide + 1);
+    }, 5000);
 </script>
+
+
 
 </body>
 </html>
